@@ -1,57 +1,162 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Video Compressor</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Compressor</title>
   <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/ffmpeg.min.js"></script>
   <style>
+    /* General Styles */
     body {
       font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 20px;
-      background-color: #f4f4f4;
-    }
-    h1 {
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
       color: #333;
+      text-align: center;
     }
-    input[type="file"] {
-      margin: 20px 0;
+
+    /* Header Styles */
+    header {
+      background-color: #007bff;
+      color: white;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-    #progressBar {
-      width: 100%;
-      max-width: 300px;
+
+    header img {
+      height: 40px;
+      margin-right: 10px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 600px;
       margin: 20px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
-    #downloadLink {
-      display: block;
-      margin: 20px auto;
+
+    /* File Input */
+    #videoInput {
+      display: none;
+    }
+
+    .upload-label {
+      display: inline-block;
       padding: 10px 20px;
       background-color: #007bff;
       color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .upload-label:hover {
+      background-color: #0056b3;
+    }
+
+    /* Progress Bar */
+    #progressBar {
+      width: 100%;
+      height: 10px;
+      background-color: #e0e0e0;
+      border-radius: 5px;
+      margin: 20px 0;
+      overflow: hidden;
+      display: none;
+    }
+
+    #progressBar div {
+      height: 100%;
+      width: 0;
+      background-color: #007bff;
+      transition: width 0.3s;
+    }
+
+    /* Download Link */
+    #downloadLink {
+      display: none;
+      margin: 20px auto;
+      padding: 10px 20px;
+      background-color: #28a745;
+      color: white;
       text-decoration: none;
       border-radius: 5px;
-      width: fit-content;
+      transition: background-color 0.3s;
     }
+
     #downloadLink:hover {
-      background-color: #0056b3;
+      background-color: #218838;
+    }
+
+    /* Error Popup */
+    .error-popup {
+      display: none;
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #dc3545;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
     }
   </style>
 </head>
 <body>
-  <h1>Video Compressor</h1>
-  <p>Upload a video to compress it to 4-5 MB.</p>
-  <input type="file" id="videoInput" accept="video/*" />
-  <br><br>
-  <progress id="progressBar" value="0" max="100" hidden></progress>
-  <p id="status"></p>
-  <a id="downloadLink" hidden>Download Compressed Video</a>
+  <!-- Header -->
+  <header>
+    <img src="https://via.placeholder.com/40" alt="Tata Neu Logo">
+    <h1>Tool for TDL</h1>
+  </header>
+
+  <!-- Main Container -->
+  <div class="container">
+    <h2>Video Compressor</h2>
+    <p>Upload a video to compress it to 4-5 MB.</p>
+
+    <!-- Upload Button -->
+    <label for="videoInput" class="upload-label">Upload Video</label>
+    <input type="file" id="videoInput" accept="video/*">
+
+    <!-- Progress Bar -->
+    <div id="progressBar">
+      <div></div>
+    </div>
+
+    <!-- Download Link -->
+    <a id="downloadLink">Download Compressed Video</a>
+
+    <!-- Error Popup -->
+    <div class="error-popup" id="errorPopup">An error occurred. Please try again.</div>
+  </div>
 
   <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     const ffmpeg = createFFmpeg({ log: true });
     let isProcessing = false;
 
-    document.getElementById('videoInput').addEventListener('change', async (e) => {
+    // DOM Elements
+    const videoInput = document.getElementById('videoInput');
+    const progressBar = document.getElementById('progressBar');
+    const downloadLink = document.getElementById('downloadLink');
+    const errorPopup = document.getElementById('errorPopup');
+
+    // Event Listener for File Input
+    videoInput.addEventListener('change', async (e) => {
       if (isProcessing) return;
       isProcessing = true;
 
@@ -72,12 +177,13 @@
         const targetSizeMB = 4.5; // Target 4.5 MB
         const targetBitrate = calculateBitrate(targetSizeMB, duration);
 
-        // Compress video
-        document.getElementById('progressBar').hidden = false;
+        // Show progress bar
+        progressBar.style.display = 'block';
         ffmpeg.setProgress(({ ratio }) => {
-          document.getElementById('progressBar').value = ratio * 100;
+          progressBar.querySelector('div').style.width = `${ratio * 100}%`;
         });
 
+        // Compress video
         await ffmpeg.run(
           '-i', 'input.mp4',
           '-vf', 'scale=640:-2', // Resize to 640px width
@@ -89,13 +195,16 @@
         // Generate download link
         const compressedData = ffmpeg.FS('readFile', 'output.mp4');
         const compressedBlob = new Blob([compressedData.buffer], { type: 'video/mp4' });
-        const downloadLink = document.getElementById('downloadLink');
         downloadLink.href = URL.createObjectURL(compressedBlob);
         downloadLink.download = 'compressed.mp4';
-        downloadLink.hidden = false;
-        document.getElementById('status').textContent = 'Compression complete!';
+        downloadLink.style.display = 'block';
       } catch (err) {
-        document.getElementById('status').textContent = `Error: ${err.message}`;
+        // Show error popup
+        errorPopup.style.display = 'block';
+        setTimeout(() => {
+          errorPopup.style.display = 'none';
+        }, 3000);
+        console.error(err);
       } finally {
         isProcessing = false;
       }
