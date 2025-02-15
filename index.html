@@ -67,21 +67,29 @@
     }
 
     /* Progress Bar */
-    #progressBar {
+    .progress-container {
+      margin: 20px 0;
+    }
+
+    .progress-bar {
       width: 100%;
       height: 10px;
       background-color: #e0e0e0;
       border-radius: 5px;
-      margin: 20px 0;
       overflow: hidden;
-      display: none;
     }
 
-    #progressBar div {
+    .progress-bar div {
       height: 100%;
       width: 0;
       background-color: #007bff;
       transition: width 0.3s;
+    }
+
+    .progress-text {
+      margin-top: 5px;
+      font-size: 14px;
+      color: #555;
     }
 
     /* Download Link */
@@ -98,6 +106,13 @@
 
     #downloadLink:hover {
       background-color: #218838;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #777;
     }
 
     /* Error Popup */
@@ -119,7 +134,7 @@
 <body>
   <!-- Header -->
   <header>
-    <img src="https://via.placeholder.com/40" alt="Tata Neu Logo">
+    <img src="https://brandlogos.net/wp-content/uploads/2022/04/tata_neu-logo-brandlogos.net_.png" alt="Tata Neu Logo">
     <h1>Tool for TDL</h1>
   </header>
 
@@ -132,17 +147,33 @@
     <label for="videoInput" class="upload-label">Upload Video</label>
     <input type="file" id="videoInput" accept="video/*">
 
-    <!-- Progress Bar -->
-    <div id="progressBar">
-      <div></div>
+    <!-- Upload Progress -->
+    <div class="progress-container" id="uploadProgress" style="display: none;">
+      <div class="progress-bar">
+        <div></div>
+      </div>
+      <div class="progress-text" id="uploadText">Uploading 0%</div>
+    </div>
+
+    <!-- Compression Progress -->
+    <div class="progress-container" id="compressProgress" style="display: none;">
+      <div class="progress-bar">
+        <div></div>
+      </div>
+      <div class="progress-text" id="compressText">Compressing 0%</div>
     </div>
 
     <!-- Download Link -->
     <a id="downloadLink">Download Compressed Video</a>
-
-    <!-- Error Popup -->
-    <div class="error-popup" id="errorPopup">An error occurred. Please try again.</div>
   </div>
+
+  <!-- Footer -->
+  <footer>
+    Made by Aslam :)
+  </footer>
+
+  <!-- Error Popup -->
+  <div class="error-popup" id="errorPopup">An error occurred. Please try again.</div>
 
   <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
@@ -151,7 +182,10 @@
 
     // DOM Elements
     const videoInput = document.getElementById('videoInput');
-    const progressBar = document.getElementById('progressBar');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const uploadText = document.getElementById('uploadText');
+    const compressProgress = document.getElementById('compressProgress');
+    const compressText = document.getElementById('compressText');
     const downloadLink = document.getElementById('downloadLink');
     const errorPopup = document.getElementById('errorPopup');
 
@@ -164,6 +198,30 @@
       if (!videoFile) return;
 
       try {
+        // Show upload progress
+        uploadProgress.style.display = 'block';
+        const uploadInterval = setInterval(() => {
+          const progress = (videoInput.files[0].progress || 0) * 100;
+          uploadText.textContent = `Uploading ${Math.round(progress)}%`;
+          uploadProgress.querySelector('.progress-bar div').style.width = `${progress}%`;
+        }, 100);
+
+        // Simulate upload progress (for demonstration)
+        await new Promise((resolve) => {
+          let progress = 0;
+          const interval = setInterval(() => {
+            progress += 10;
+            videoInput.files[0].progress = progress / 100;
+            if (progress >= 100) {
+              clearInterval(interval);
+              resolve();
+            }
+          }, 300);
+        });
+
+        clearInterval(uploadInterval);
+        uploadText.textContent = 'Upload complete!';
+
         // Initialize FFmpeg
         if (!ffmpeg.isLoaded()) {
           await ffmpeg.load();
@@ -172,22 +230,19 @@
         // Write video to FFmpeg's memory
         ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
 
-        // Get video duration
-        const duration = await getVideoDuration(videoFile);
-        const targetSizeMB = 4.5; // Target 4.5 MB
-        const targetBitrate = calculateBitrate(targetSizeMB, duration);
-
-        // Show progress bar
-        progressBar.style.display = 'block';
+        // Show compression progress
+        compressProgress.style.display = 'block';
         ffmpeg.setProgress(({ ratio }) => {
-          progressBar.querySelector('div').style.width = `${ratio * 100}%`;
+          const progress = ratio * 100;
+          compressText.textContent = `Compressing ${Math.round(progress)}%`;
+          compressProgress.querySelector('.progress-bar div').style.width = `${progress}%`;
         });
 
         // Compress video
         await ffmpeg.run(
           '-i', 'input.mp4',
           '-vf', 'scale=640:-2', // Resize to 640px width
-          '-b:v', `${targetBitrate}k`, // Target bitrate
+          '-b:v', '500k', // Target bitrate
           '-b:a', '64k', // Compress audio
           'output.mp4'
         );
@@ -209,24 +264,6 @@
         isProcessing = false;
       }
     });
-
-    // Helper: Calculate bitrate for target file size
-    function calculateBitrate(targetMB, durationSeconds) {
-      const targetBits = targetMB * 8192; // Convert MB to kilobits
-      return Math.floor(targetBits / durationSeconds);
-    }
-
-    // Helper: Get video duration
-    function getVideoDuration(file) {
-      return new Promise((resolve) => {
-        const video = document.createElement('video');
-        video.preload = 'metadata';
-        video.onloadedmetadata = () => {
-          resolve(video.duration);
-        };
-        video.src = URL.createObjectURL(file);
-      });
-    }
   </script>
 </body>
 </html>
