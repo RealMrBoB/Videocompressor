@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Video Compressor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/ffmpeg.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      color: #333;
+    }
+    input[type="file"] {
+      margin: 20px 0;
+    }
+    #progressBar {
+      width: 100%;
+      max-width: 300px;
+      margin: 20px auto;
+    }
+    #downloadLink {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      width: fit-content;
+    }
+    #downloadLink:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h1>Video Compressor</h1>
+  <p>Upload a video to compress it to 4-5 MB.</p>
+  <input type="file" id="videoInput" accept="video/*" />
+  <br><br>
+  <progress id="progressBar" value="0" max="100" hidden></progress>
+  <p id="status"></p>
+  <a id="downloadLink" hidden>Download Compressed Video</a>
+
+  <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
+    let isProcessing = false;
+
+    document.getElementById('videoInput').addEventListener('change', async (e) => {
+      if (isProcessing) return;
+      isProcessing = true;
+
+      const videoFile = e.target.files[0];
+      if (!videoFile) return;
+
+      try {
+        // Initialize FFmpeg
+        if (!ffmpeg.isLoaded()) {
+          await ffmpeg.load();
+        }
+
+        // Write video to FFmpeg's memory
+        ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
+
+        // Get video duration
+        const duration = await getVideoDuration(videoFile);
+        const targetSizeMB = 4.5; // Target 4.5 MB
+        const targetBitrate = calculateBitrate(targetSizeMB, duration);
+
+        // Compress video
+        document.getElementById('progressBar').hidden = false;
+        ffmpeg.setProgress(({ ratio }) => {
+          document.getElementById('progressBar').value = ratio * 100;
+        });
+
+        await ffmpeg.run(
+          '-i', 'input.mp4',
+          '-vf', 'scale=640:-2', // Resize to 640px width
+          '-b:v', `${targetBitrate}k`, // Target bitrate
+          '-b:a', '64k', // Compress audio
+          'output.mp4'
+        );
+
+        // Generate download link
+        const compressedData = ffmpeg.FS('readFile', 'output.mp4');
+        const compressedBlob = new Blob([compressedData.buffer], { type: 'video/mp4' });
+        const downloadLink = document.getElementById('downloadLink');
+        downloadLink.href = URL.createObjectURL(compressedBlob);
+        downloadLink.download = 'compressed.mp4';
+        downloadLink.hidden = false;
+        document.getElementById('status').textContent = 'Compression complete!';
+      } catch (err) {
+        document.getElementById('status').textContent = `Error: ${err.message}`;
+      } finally {
+        isProcessing = false;
+      }
+    });
+
+    // Helper: Calculate bitrate for target file size
+    function calculateBitrate(targetMB, durationSeconds) {
+      const targetBits = targetMB * 8192; // Convert MB to kilobits
+      return Math.floor(targetBits / durationSeconds);
+    }
+
+    // Helper: Get video duration
+    function getVideoDuration(file) {
+      return new Promise((resolve) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.onloadedmetadata = () => {
+          resolve(video.duration);
+        };
+        video.src = URL.createObjectURL(file);
+      });
+    }
+  </script>
+</body>
+</html>
